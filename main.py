@@ -1,8 +1,9 @@
 from flask import Flask,jsonify,request
 from flask_cors import CORS
-import pandas as pd,threading,socket,json,time
+import pandas as pd,threading,socket,json
+from src.playWav import play_wav,get_wav_duration
 from src.realtimeRecord import sampleRealtimeRecord
-from src.playWav import play_wav
+from src.ragGenerate import generate
 
 # --- setup ---
 app=Flask(__name__)
@@ -37,23 +38,28 @@ def get_templeteData():
 # /api/audio
 @app.route('/api/audio',methods=['POST'])
 def play_audio():
-    eventHandler(5)
     audioId=request.json
     data=df[df['id']==audioId['id']]
     audioData=data['audioData'].values[0]
-    play_wav(f'./data/audioData/{audioData}')
-    return jsonify({'message':'hello from flask!'},200)
+    messageData=data['response'].values[0]
+    path=f'./data/audioData/{audioData}'
+    audioTime=get_wav_duration(path)
+    eventHandler(audioTime,messageData)
+    play_wav(path)
+    response={
+        'message':messageData
+    }
+    return jsonify(response,200)
 
 # /api/realtime
 @app.route('/api/realtime',methods=['POST'])
 def realtimeGenerate():
     received=request.json
     print(received['message'])
-    sampleRealtimeRecord()
-    response={
-        'answer':'Hello this is a test.'
-    }
-    return jsonify(response,200)
+    query=sampleRealtimeRecord()
+    answer=generate(query)
+    eventHandler(7,answer)
+    return jsonify({'answer':answer},200)
 
 # --- UE server ---
 def UE_server():
@@ -65,7 +71,6 @@ def UE_server():
         server.listen(1)
         print('WaitStartGame')
         UE_conn,addr=server.accept()
-        print(type(UE_conn))
         try:
             while True:
                 data=UE_conn.recv(1)
@@ -82,31 +87,28 @@ def UE_server():
         print("Port 30010 might be in use. Please check if another instance is running.")
 
 def sendMessage():
+    data_updated_event.clear()
     while True:
         data_updated_event.wait()
-        
         with data_lock:
             data_updated_event.clear()
             current_data=sendData.copy()
-        
-        
         try:
-            print(type(UE_conn))
             UE_conn.sendall(json.dumps(current_data).encode('utf-8'))
         except(ConnectionResetError,BrokenPipeError):
             break
         
-def eventHandler(data):
-    print(type(UE_conn))
+def eventHandler(audioTime,answer):
     with data_lock:
-        sendData['audioTime']=data
+        sendData['message']=answer
+        sendData['audioTime']=audioTime
     data_updated_event.set()
     
 
 
 if __name__=='__main__':
-    send_thread=threading.Thread(target=sendMessage,daemon=True)
-    send_thread.start()
     UE_thread=threading.Thread(target=UE_server,daemon=True)
     UE_thread.start()
-    app.run(debug=True,port=5000)
+    send_thread=threading.Thread(target=sendMessage,daemon=True)
+    send_thread.start()
+    app.run(debug=True,port=5000,use_reloader=False)

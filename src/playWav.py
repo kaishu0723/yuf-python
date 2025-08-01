@@ -15,3 +15,14 @@ def play_wav(filename):
     stream.stop_stream()
     stream.close()
     p.terminate()
+
+def get_wav_duration(filename):
+    with wave.open(filename,'rb') as f:
+        frames=f.getnframes()
+        rate=f.getframerate()
+        duration=frames/float(rate)
+        second=int(duration)
+    return second
+
+if __name__=='__main__':
+    print(type(get_wav_duration('./data/output.wav')))

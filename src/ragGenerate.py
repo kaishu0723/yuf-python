@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 
 load_dotenv()
-sampleQuery='温泉のある宿を教えてください'
+sampleQuery='おすすめの観光スポットを知りたい'
 
 # --- retriever ---
 def retriever(query):
